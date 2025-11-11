@@ -1,0 +1,14 @@
+[
+  {
+    "adapter": "Delve",
+    "label": "Go (Delve)",
+    "request": "launch",
+    "mode": "exec",
+    "program": "dist/bin/tetris.exe",
+    "cwd": "${ZED_WORKTREE_ROOT}",
+    "build": {
+      "command": "go",
+      "args": ["build", "-ldflags", "'-H=windowsgui'", "-o", "dist/bin/tetris.exe"]
+    }
+  }
+]

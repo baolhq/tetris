@@ -1,0 +1,27 @@
+[
+  {
+    "label": "Build Project",
+    "command": "go build",
+    "args": ["-ldflags", "'-H=windowsgui'", "-o", "dist/bin/tetris.exe"],
+    "hide": "on_success"
+  },
+  {
+    "label": "Build Project (Optimized)",
+    "command": "go build",
+    "args": [
+      "-ldflags",
+      "'-H=windowsgui -s -w'",
+      "-trimpath",
+      "-o",
+      "dist/bin/tetris.exe"
+    ],
+    "hide": "on_success"
+  },
+  {
+    "label": "Build Project (WesAssembly)",
+    "env": { "GOOS": "js", "GOARCH": "wasm" },
+    "command": "go build",
+    "args": ["-ldflags", "'-s -w'", "-trimpath", "-o", "dist/wasm/tetris.wasm"],
+    "hide": "on_success"
+  }
+]
