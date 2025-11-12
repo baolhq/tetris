@@ -1,29 +1,37 @@
 package core
 
 import (
+	"fmt"
 	"image/color"
 	"slices"
+	"strconv"
 	"time"
 
+	"github.com/baolhq/tetris/internal/assets"
 	"github.com/baolhq/tetris/internal/consts"
 	"github.com/baolhq/tetris/internal/models"
 	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 type Game struct {
 	occupied    [][]color.RGBA
 	activeBlock *models.Block
+	nextBlock   *models.Block
 	elapsed     time.Duration
 	prevTime    time.Time
 	baseTimer   time.Duration
 	delayTimer  time.Duration
 	accelTimer  time.Duration
 	moveDir     int // -1=left, 0=none, 1=right
+	score       int
 }
 
+var mainFont = assets.LoadFont(assets.MainFont, 20)
+
 func Setup() *Game {
-	b := models.NewBlock()
+	b, n := models.NewBlock(), models.NewBlock()
 
 	grid := make([][]color.RGBA, consts.GameRows)
 	for y := range grid {
@@ -35,6 +43,7 @@ func Setup() *Game {
 
 	g := &Game{
 		activeBlock: b,
+		nextBlock:   n,
 		occupied:    grid,
 		prevTime:    time.Now(),
 		baseTimer:   time.Millisecond * 1000,
@@ -172,6 +181,8 @@ func checkComplete(g *Game) []bool {
 func shiftDown(g *Game, comp []bool) {
 	for y := range g.occupied {
 		if comp[y] {
+			g.score++
+
 			// Shift all rows above this one down by one
 			for py := y; py > 0; py-- {
 				copy(g.occupied[py], g.occupied[py-1])
@@ -205,7 +216,8 @@ func (g *Game) Update() error {
 				g.occupied[y][x] = g.activeBlock.Color
 			}
 
-			g.activeBlock = models.NewBlock()
+			g.activeBlock = g.nextBlock
+			g.nextBlock = models.NewBlock()
 		}
 
 		comp := checkComplete(g)
@@ -223,6 +235,64 @@ func (g *Game) Layout(w, h int) (int, int) {
 	return consts.ScreenWidth, consts.ScreenHeight
 }
 
+func drawCenteredText(screen *ebiten.Image, font text.Face, content string) {
+	op := &text.DrawOptions{}
+	cx, cy := consts.ScreenWidth-50.0, 62.5
+
+	op.GeoM.Translate(cx, cy)
+	op.ColorScale.ScaleWithColor(consts.DarkGray)
+	text.Draw(screen, content, font, op)
+}
+
+func drawNextBlock(screen *ebiten.Image, b *models.Block) {
+	// Preview box
+	panelX, panelY := float32(consts.ScreenWidth-60), float32(0)
+	panelW, panelH := float32(60), float32(60)
+	vector.FillRect(
+		screen, panelX, panelY,
+		panelW, panelH, consts.CellOutlineColor, false)
+
+	// Small cell size for preview (smaller than main grid)
+	previewCellSize := float32(12)
+
+	// Find min/max coordinates of the block
+	minX, minY := b.Shape[0][0], b.Shape[0][1]
+	maxX, maxY := b.Shape[0][0], b.Shape[0][1]
+	for _, c := range b.Shape {
+		if c[0] < minX {
+			minX = c[0]
+		}
+		if c[1] < minY {
+			minY = c[1]
+		}
+		if c[0] > maxX {
+			maxX = c[0]
+		}
+		if c[1] > maxY {
+			maxY = c[1]
+		}
+	}
+
+	blockWidth := maxX - minX + 1
+	blockHeight := maxY - minY + 1
+
+	// Center the block in the panel
+	offsetX := panelX + (panelW-float32(blockWidth)*previewCellSize)/2
+	offsetY := panelY + (panelH-float32(blockHeight)*previewCellSize)/2
+
+	for _, c := range b.Shape {
+		vector.FillRect(
+			screen,
+			offsetX+float32(c[0]-minX)*previewCellSize,
+			offsetY+float32(c[1]-minY)*previewCellSize,
+			previewCellSize,
+			previewCellSize,
+			b.Color,
+			false,
+		)
+	}
+}
+
 func (g *Game) Draw(screen *ebiten.Image) {
 	// Draw background and cell outlines
 	screen.Fill(consts.BackgroundColor)
@@ -235,6 +305,11 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			)
 		}
 	}
+
+	// Draw next block and score
+	drawNextBlock(screen, g.nextBlock)
+	score := fmt.Sprintf("%0*s", 4, strconv.Itoa(g.score))
+	drawCenteredText(screen, mainFont, score)
 
 	// Draw blocks
 	models.DrawBlock(screen, g.activeBlock)
