@@ -1,11 +1,18 @@
 package core
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"time"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
 
 type KeyState struct {
 	IsDown      bool
 	WasPressed  bool
 	WasReleased bool
+
+	HoldStart  time.Time
+	NextRepeat time.Time
 }
 
 type Action string
@@ -17,6 +24,11 @@ const (
 	InputRight Action = "MoveRight"
 	InputPause Action = "Pause"
 	InputEnter Action = "Enter"
+)
+
+const (
+	das = 500 * time.Millisecond // delay before auto-repeat in miliseconds
+	ari = 100 * time.Millisecond // auto-repeat interval in miliseconds
 )
 
 type InputManager struct {
@@ -48,12 +60,31 @@ func (i *InputManager) RegisterAction(action Action, keys ...ebiten.Key) {
 }
 
 func (i *InputManager) Update() {
+	now := time.Now()
+
 	for key, state := range i.keyStates {
 		pressed := ebiten.IsKeyPressed(key)
+
 		state.WasPressed = !state.IsDown && pressed
 		state.WasReleased = state.IsDown && !pressed
 		state.IsDown = pressed
+
+		// Start hold timer
+		if state.WasPressed {
+			state.HoldStart = now
+			state.NextRepeat = now.Add(das)
+		}
+
+		// Clear hold timers when released
+		if state.WasReleased {
+			state.HoldStart = time.Time{}
+			state.NextRepeat = time.Time{}
+		}
 	}
+}
+
+func (i *InputManager) IsDown(action Action) bool {
+	return i.checkKeys(i.keyMap[action], func(s *KeyState) bool { return s.IsDown })
 }
 
 func (i *InputManager) WasPressed(action Action) bool {
@@ -64,8 +95,28 @@ func (i *InputManager) WasReleased(action Action) bool {
 	return i.checkKeys(i.keyMap[action], func(s *KeyState) bool { return s.WasReleased })
 }
 
-func (i *InputManager) IsDown(action Action) bool {
-	return i.checkKeys(i.keyMap[action], func(s *KeyState) bool { return s.IsDown })
+func (i *InputManager) WasRepeated(action Action) bool {
+	now := time.Now()
+
+	return i.checkKeys(i.keyMap[action], func(s *KeyState) bool {
+		// must be held
+		if !s.IsDown || s.HoldStart.IsZero() {
+			return false
+		}
+
+		// if this was the same frame as WasPressed, don't repeat yet
+		if s.WasPressed {
+			return false
+		}
+
+		// wait for das
+		if now.Before(s.NextRepeat) {
+			return false
+		}
+
+		s.NextRepeat = now.Add(ari)
+		return true
+	})
 }
 
 func (i *InputManager) checkKeys(keys []ebiten.Key, checker func(*KeyState) bool) bool {

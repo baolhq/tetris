@@ -19,6 +19,7 @@ type Game struct {
 	baseTimer   time.Duration
 	delayTimer  time.Duration
 	accelTimer  time.Duration
+	moveDir     int // -1=left, 0=none, 1=right
 }
 
 func Setup() *Game {
@@ -55,20 +56,71 @@ func handleInput(g *Game) error {
 		g.activeBlock.Rotate()
 	}
 
-	if Input.WasPressed(InputLeft) {
-		g.activeBlock.X -= 1
-		g.activeBlock.KeepInBound()
-		if checkCollision(g) {
-			g.activeBlock.X += 1
-		}
-	} else if Input.WasPressed(InputRight) {
-		g.activeBlock.X += 1
-		g.activeBlock.KeepInBound()
-		if checkCollision(g) {
-			g.activeBlock.X -= 1
+	// --- query input once per frame ---
+	leftDown, rightDown := Input.IsDown(InputLeft), Input.IsDown(InputRight)
+	leftWasRep, rightWasRep := Input.WasRepeated(InputLeft), Input.WasRepeated(InputRight)
+	leftWasPressed, rightWasPressed := Input.WasPressed(InputLeft), Input.WasPressed(InputRight)
+
+	moveLeft := leftWasPressed || leftWasRep
+	moveRight := rightWasPressed || rightWasRep
+
+	// --- update direction lock ---
+	if g.moveDir == 0 {
+		if leftWasRep {
+			g.moveDir = -1
+		} else if rightWasRep {
+			g.moveDir = 1
 		}
 	}
 
+	// Unlock if locked key is released
+	switch g.moveDir {
+	case -1:
+		if !leftDown {
+			g.moveDir = 0
+			if rightDown && rightWasRep {
+				g.moveDir = 1
+			}
+		}
+	case 1:
+		if !rightDown {
+			g.moveDir = 0
+			if leftDown && leftWasRep {
+				g.moveDir = -1
+			}
+		}
+	}
+
+	// Cancel opposite key if a direction is locked
+	switch g.moveDir {
+	case -1:
+		moveRight = false
+	case 1:
+		moveLeft = false
+	}
+
+	// Cancel both if simultaneous press without lock
+	if moveLeft && moveRight && g.moveDir == 0 {
+		moveLeft, moveRight = false, false
+	}
+
+	// --- apply movement ---
+	switch {
+	case moveLeft:
+		g.activeBlock.X--
+		g.activeBlock.KeepInBound()
+		if checkCollision(g) {
+			g.activeBlock.X++
+		}
+	case moveRight:
+		g.activeBlock.X++
+		g.activeBlock.KeepInBound()
+		if checkCollision(g) {
+			g.activeBlock.X--
+		}
+	}
+
+	// --- handle soft drop ---
 	if Input.IsDown(InputDown) {
 		g.baseTimer = g.accelTimer
 	} else if Input.WasReleased(InputDown) {
