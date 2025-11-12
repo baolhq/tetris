@@ -112,25 +112,33 @@ func (b *Block) Rotate() {
 }
 
 func (b *Block) KeepInBound() {
-	w := b.Width
+	w, h := b.Width, b.Height
 	gridW := consts.ScreenWidth / consts.CellSize
+	gridH := consts.ScreenHeight / consts.CellSize
 
 	if b.X+w > gridW {
 		b.X = gridW - w
 	} else if b.X < 0 {
 		b.X = 0
 	}
+
+	if b.Y+h > gridH {
+		b.Y = gridH - h
+	}
 }
 
-func (b Block) Draw(screen *ebiten.Image) {
-	for _, cell := range b.Shape {
-		x := cell[0] + b.X
-		y := cell[1] + b.Y
+func DrawBlock(screen *ebiten.Image, block *Block) {
+	for _, p := range block.Shape {
+		x := (block.X + p[0]) * consts.CellSize
+		y := (block.Y + p[1]) * consts.CellSize
 
 		vector.FillRect(
-			screen, float32(x*consts.CellSize), float32(y*consts.CellSize),
-			consts.CellSize, consts.CellSize,
-			b.Color, false,
+			screen,
+			float32(x), float32(y),
+			consts.CellSize,
+			consts.CellSize,
+			block.Color,
+			false,
 		)
 	}
 }
