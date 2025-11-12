@@ -54,7 +54,7 @@ func NewBlock() *Block {
 	}
 
 	b.UpdateDimensions()
-	maxX := consts.ScreenWidth/consts.CellSize - b.Width
+	maxX := consts.GameCols - b.Width
 	b.X = rand.Intn(maxX + 1)
 	b.Y = -b.Height
 
@@ -113,17 +113,15 @@ func (b *Block) Rotate() {
 
 func (b *Block) KeepInBound() {
 	w, h := b.Width, b.Height
-	gridW := consts.ScreenWidth / consts.CellSize
-	gridH := consts.ScreenHeight / consts.CellSize
 
-	if b.X+w > gridW {
-		b.X = gridW - w
+	if b.X+w > consts.GameCols {
+		b.X = consts.GameCols - w
 	} else if b.X < 0 {
 		b.X = 0
 	}
 
-	if b.Y+h > gridH {
-		b.Y = gridH - h
+	if b.Y+h > consts.GameRows {
+		b.Y = consts.GameRows - h
 	}
 }
 

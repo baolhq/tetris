@@ -23,12 +23,10 @@ type Game struct {
 
 func Setup() *Game {
 	b := models.NewBlock()
-	rows := consts.ScreenHeight / consts.CellSize
-	cols := consts.ScreenWidth / consts.CellSize
 
-	grid := make([][]color.RGBA, rows)
+	grid := make([][]color.RGBA, consts.GameRows)
 	for y := range grid {
-		grid[y] = make([]color.RGBA, cols)
+		grid[y] = make([]color.RGBA, consts.GameCols)
 		for x := range grid[y] {
 			grid[y][x] = consts.BackgroundColor
 		}
@@ -60,9 +58,15 @@ func handleInput(g *Game) error {
 	if Input.WasPressed(InputLeft) {
 		g.activeBlock.X -= 1
 		g.activeBlock.KeepInBound()
+		if checkCollision(g) {
+			g.activeBlock.X += 1
+		}
 	} else if Input.WasPressed(InputRight) {
 		g.activeBlock.X += 1
 		g.activeBlock.KeepInBound()
+		if checkCollision(g) {
+			g.activeBlock.X -= 1
+		}
 	}
 
 	if Input.IsDown(InputDown) {
@@ -79,11 +83,11 @@ func checkCollision(g *Game) bool {
 		x := g.activeBlock.X + cell[0]
 		y := g.activeBlock.Y + cell[1]
 
-		if y >= len(g.occupied) {
+		if y >= consts.GameRows {
 			return true
 		}
 
-		if y < 0 {
+		if x < 0 || x > consts.GameCols || y < 0 {
 			continue
 		}
 
@@ -116,10 +120,13 @@ func checkComplete(g *Game) []bool {
 func shiftDown(g *Game, comp []bool) {
 	for y := range g.occupied {
 		if comp[y] {
+			// Shift all rows above this one down by one
 			for py := y; py > 0; py-- {
-				for px := range g.occupied[py] {
-					g.occupied[py][px] = g.occupied[py-1][px]
-				}
+				copy(g.occupied[py], g.occupied[py-1])
+			}
+			// Clear the top row
+			for x := range g.occupied[0] {
+				g.occupied[0][x] = consts.BackgroundColor
 			}
 		}
 	}
@@ -152,7 +159,8 @@ func (g *Game) Update() error {
 		comp := checkComplete(g)
 		if slices.Contains(comp, true) {
 			shiftDown(g, comp)
-			g.baseTimer -= time.Millisecond * 200
+			g.baseTimer -= time.Millisecond * 100
+			g.delayTimer -= time.Millisecond * 100
 		}
 	}
 
@@ -164,13 +172,10 @@ func (g *Game) Layout(w, h int) (int, int) {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-	rows := consts.ScreenWidth / consts.CellSize
-	cols := consts.ScreenHeight / consts.CellSize
-
 	// Draw background and cell outlines
 	screen.Fill(consts.BackgroundColor)
-	for y := range cols {
-		for x := range rows {
+	for y := range consts.GameRows {
+		for x := range consts.GameCols {
 			vector.StrokeRect(
 				screen, float32(x*consts.CellSize), float32(y*consts.CellSize),
 				consts.CellSize, consts.CellSize,
