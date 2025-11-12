@@ -2,6 +2,7 @@ package core
 
 import (
 	"image/color"
+	"slices"
 	"time"
 
 	"github.com/baolhq/tetris/internal/consts"
@@ -15,13 +16,16 @@ type Game struct {
 	activeBlock *models.Block
 	elapsed     time.Duration
 	prevTime    time.Time
+	baseTimer   time.Duration
+	delayTimer  time.Duration
+	accelTimer  time.Duration
 }
 
 func Setup() *Game {
+	b := models.NewBlock()
 	rows := consts.ScreenHeight / consts.CellSize
 	cols := consts.ScreenWidth / consts.CellSize
 
-	b := models.NewBlock()
 	grid := make([][]color.RGBA, rows)
 	for y := range grid {
 		grid[y] = make([]color.RGBA, cols)
@@ -34,6 +38,9 @@ func Setup() *Game {
 		activeBlock: b,
 		occupied:    grid,
 		prevTime:    time.Now(),
+		baseTimer:   time.Millisecond * 1000,
+		delayTimer:  time.Millisecond * 1000,
+		accelTimer:  time.Millisecond * 20,
 	}
 
 	return g
@@ -56,6 +63,12 @@ func handleInput(g *Game) error {
 	} else if Input.WasPressed(InputRight) {
 		g.activeBlock.X += 1
 		g.activeBlock.KeepInBound()
+	}
+
+	if Input.IsDown(InputDown) {
+		g.baseTimer = g.accelTimer
+	} else if Input.WasReleased(InputDown) {
+		g.baseTimer = g.delayTimer
 	}
 
 	return nil
@@ -82,6 +95,36 @@ func checkCollision(g *Game) bool {
 	return false
 }
 
+func checkComplete(g *Game) []bool {
+	comp := make([]bool, len(g.occupied))
+
+	for y := range len(g.occupied) {
+		lineComp := true
+
+		for x := range len(g.occupied[y]) {
+			if g.occupied[y][x] == consts.BackgroundColor {
+				lineComp = false
+			}
+		}
+
+		comp[y] = lineComp
+	}
+
+	return comp
+}
+
+func shiftDown(g *Game, comp []bool) {
+	for y := range g.occupied {
+		if comp[y] {
+			for py := y; py > 0; py-- {
+				for px := range g.occupied[py] {
+					g.occupied[py][px] = g.occupied[py-1][px]
+				}
+			}
+		}
+	}
+}
+
 func (g *Game) Update() error {
 	if err := handleInput(g); err != nil {
 		return err
@@ -90,7 +133,7 @@ func (g *Game) Update() error {
 	g.elapsed += time.Since(g.prevTime)
 	g.prevTime = time.Now()
 
-	if g.elapsed >= time.Millisecond*200 {
+	if g.elapsed >= g.baseTimer {
 		g.elapsed = 0
 		g.activeBlock.Y++
 
@@ -104,6 +147,12 @@ func (g *Game) Update() error {
 			}
 
 			g.activeBlock = models.NewBlock()
+		}
+
+		comp := checkComplete(g)
+		if slices.Contains(comp, true) {
+			shiftDown(g, comp)
+			g.baseTimer -= time.Millisecond * 200
 		}
 	}
 
